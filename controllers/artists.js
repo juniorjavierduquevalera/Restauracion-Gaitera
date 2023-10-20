@@ -1,8 +1,7 @@
 const Artist = require("../models/artist");
 const Album = require("../models/album");
 const Song = require("../models/song");
-const User = require("../models/user");
-const fs = require("fs");
+  const fs = require("fs");
 const path = require("path");
 
 const save = async (req, res) => {
@@ -12,6 +11,15 @@ const save = async (req, res) => {
 
     // Obtener el usuario identificado desde req.user
     const userIdentity = req.user;
+    const userRole = req.user.role;
+
+    // Verifica si el usuario tiene el rol "admin"
+    if (userRole !== "admin") {
+      return res.status(403).json({
+        status: "error",
+        message: "No tienes permiso para actualizar este artista.",
+      });
+    }
 
     // Crear el objeto del artista y asignar el usuario identificado como propietario
     let artist = new Artist({
@@ -24,7 +32,7 @@ const save = async (req, res) => {
 
     // Eliminar los campos __v y create_at de la respuesta
     artist.__v = undefined;
-    artist.create_at = undefined;
+    artist.created_at = undefined;
 
     res.status(200).send({
       status: "success",
@@ -47,7 +55,7 @@ const search = async (req, res) => {
     const artistId = req.params.id;
 
     // Buscar el artista por su ID en la base de datos
-    const artist = await Artist.findById(artistId).select("-create_at -__v");
+    const artist = await Artist.findById(artistId).select("-created_at -__v");
 
     if (!artist) {
       // Si no se encuentra el artista, devolver un mensaje de error
@@ -91,7 +99,7 @@ const list = async (req, res) => {
       .skip(startIndex)
       .limit(itemsPerPage)
       .sort("name")
-      .select("-create_at -__v");
+      .select("-created_at -__v");
 
     // Contar el total de artistas en la base de datos (sin paginar)
     const totalArtists = await Artist.countDocuments();
@@ -117,7 +125,6 @@ const updateArtist = async (req, res) => {
   try {
     const artistId = req.params.id;
     const updates = req.body;
-    const userIdentity = req.user.id;
     const userRole = req.user.role;
 
     // Busca el artista por su ID en la base de datos
@@ -130,20 +137,18 @@ const updateArtist = async (req, res) => {
       });
     }
 
-    // Verifica si el usuario es el propietario o tiene el rol "admin"
+    // Verifica si el usuario tiene el rol "admin"
     if (userRole !== "admin") {
-      if (artist.usuario.toString() !== userIdentity.toString()) {
-        return res.status(403).json({
-          status: "error",
-          message: "No tienes permiso para actualizar este artista.",
-        });
-      }
+      return res.status(403).json({
+        status: "error",
+        message: "No tienes permiso para actualizar este artista.",
+      });
     }
 
     // Actualiza el artista y obtén el nuevo objeto actualizado
     const updatedArtist = await Artist.findByIdAndUpdate(artistId, updates, {
       new: true,
-    }).select("-create_at -__v");
+    }).select("-created_at -__v");
 
     res.status(200).json({
       status: "success",
@@ -185,40 +190,63 @@ const remove = async (req, res) => {
       });
     }
 
-    // Eliminar el artista de la base de datos
-    const albumRemoved = await Album.find({ artist: artistId });
+    // Buscar todos los álbumes del artista
+    const albums = await Album.find({ artist: artistId });
 
-    // Eliminar todas las canciones de los álbumes y luego eliminar los álbumes
-    for (const album of albumRemoved) {
+    // Iterar a través de los álbumes para eliminar canciones, archivos de audio e imágenes de álbumes
+    for (const album of albums) {
+      // Obtén una lista de canciones del álbum
+      const songsToDelete = await Song.find({ album: album._id });
+
+      // Itera a través de las canciones y elimina los archivos de audio
+      for (const song of songsToDelete) {
+        const songFilePath = `./uploads/audios/${song.file}`;
+        if (fs.existsSync(songFilePath)) {
+          fs.unlinkSync(songFilePath);
+        }
+      }
+
+      // Elimina todas las canciones del álbum
       await Song.deleteMany({ album: album._id });
+
+      // Elimina la imagen del álbum si existe
+      if (album.image) {
+        const albumImageFilePath = `./uploads/album/${album.image}`;
+        if (fs.existsSync(albumImageFilePath)) {
+          fs.unlinkSync(albumImageFilePath);
+        }
+      }
+
+      // Elimina el álbum
       await Album.findByIdAndRemove(album._id);
     }
 
-    const artistRemoved = await Artist.findOneAndDelete(artistId);
-
-    // Verificar si el artista fue eliminado exitosamente
-    if (!artistRemoved) {
-      return res.status(404).json({
-        status: "error",
-        message: "El artista no fue encontrado.",
-      });
+    // Elimina la imagen del artista si existe
+    if (artist.image) {
+      const artistImageFilePath = `./uploads/artists/${artist.image}`;
+      if (fs.existsSync(artistImageFilePath)) {
+        fs.unlinkSync(artistImageFilePath);
+      }
     }
+
+    // Elimina el artista
+    await Artist.findByIdAndRemove(artistId);
 
     // Respuesta exitosa
     res.status(200).json({
       status: "success",
-      message: "Artista eliminado exitosamente.",
-      artistRemoved,
+      message: "Artista y sus álbumes/canciones eliminados exitosamente.",
     });
   } catch (error) {
     // Manejo de errores generales
     res.status(500).json({
       status: "error",
-      message: "Error al eliminar el artista.",
+      message: "Error al eliminar el artista y sus álbumes/canciones.",
       error: error.message,
     });
   }
 };
+
 
 const upload = async (req, res) => {
   // Recoger el fichero y comprobar si existe
@@ -282,7 +310,7 @@ const upload = async (req, res) => {
       { _id: req.params.id },
       { image: req.file.filename },
       { new: true }
-    ).select("-email -__v");
+    ).select("-email -__v -created_at");
 
     if (!updatedArtist) {
       // Si no se encontró un usuario para actualizar, puedes manejar el error aquí
@@ -345,5 +373,5 @@ module.exports = {
   updateArtist,
   remove,
   upload,
-  avatar,  
+  avatar,
 };

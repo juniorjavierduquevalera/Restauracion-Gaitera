@@ -128,7 +128,7 @@ const profile = async (req, res) => {
     const id = req.params.id;
 
     // Consulta para obtener los datos del perfil
-    const user = await User.findById(id);
+    const user = await User.findById(id).select('-created_at -__v');
 
     if (!user) {
       return res.status(404).json({
@@ -138,9 +138,8 @@ const profile = async (req, res) => {
     }
 
     res.status(200).json({
-      status: "success",
-      message: "Perfil encontrado",
-      data: user,
+      status: "success",      
+      profile: user,
     });
   } catch (error) {
     res.status(500).json({
@@ -288,7 +287,7 @@ const upload = async (req, res) => {
       { _id: req.user.id },
       { image: req.file.filename },
       { new: true }
-    ).select("-email -__v");
+    ).select("-email -__v -created_at");
 
     if (!updatedUser) {
       // Si no se encontró un usuario para actualizar, puedes manejar el error aquí
