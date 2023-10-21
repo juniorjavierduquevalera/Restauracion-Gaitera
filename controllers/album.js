@@ -6,21 +6,42 @@ const path = require("path");
 
 const save = async (req, res) => {
   try {
-    // Sacar datos enviados en el body
+    // Extraer los datos enviados en el body de la solicitud
     let params = req.body;
+    const userRole = req.user.role;
 
-    // Crear objeto
+    // Verificar si el usuario tiene el rol "admin"
+    if (userRole !== "admin") {
+      return res.status(403).json({
+        status: "error",
+        message: "No tienes permiso para guardar este álbum",
+      });
+    }
+
+    // Crear un objeto "album" a partir de los datos recibidos
     let album = new Album(params);
 
-    // Guardar el objeto en la base de datos
+    // Guardar el objeto "album" en la base de datos
     const savedAlbum = await album.save();
 
+    // Crear un nuevo objeto sin los campos "__v" y "created_at"
+    const responseAlbum = {
+      ...savedAlbum._doc,
+      _id: savedAlbum._id, // Mantener el _id si es necesario
+    };
+
+    // Eliminar los campos "__v" y "created_at"
+    delete responseAlbum.__v;
+    delete responseAlbum.created_at;
+
+    // Responder con un mensaje de éxito y el nuevo objeto sin los campos no deseados
     res.status(200).json({
       status: "success",
       message: "Álbum guardado exitosamente.",
-      album: savedAlbum,
+      album: responseAlbum,
     });
   } catch (error) {
+    // Responder con un mensaje de error en caso de fallo
     res.status(500).json({
       status: "error",
       message: "Error al guardar el álbum.",
@@ -104,6 +125,7 @@ const listAlbumsByArtist = async (req, res) => {
     });
   }
 };
+
 const updateAlbum = async (req, res) => {
   try {
     // Recoger el parámetro de la URL que contiene el ID del álbum
@@ -119,7 +141,7 @@ const updateAlbum = async (req, res) => {
     if (userRole !== "admin") {
       return res.status(403).json({
         status: "error",
-        message: "No tienes permiso para actualizar este album.",
+        message: "No tienes permiso para actualizar este álbum.",
       });
     }
 
@@ -136,11 +158,21 @@ const updateAlbum = async (req, res) => {
       });
     }
 
+    // Crear un nuevo objeto sin los campos "__v" y "created_at"
+    const responseAlbum = {
+      ...updatedAlbum._doc,
+      _id: updatedAlbum._id, // Mantener el _id si es necesario
+    };
+
+    // Eliminar los campos "__v" y "created_at" del objeto actualizado
+    delete responseAlbum.__v;
+    delete responseAlbum.created_at;
+
     // Devolver la respuesta con el álbum actualizado
     res.status(200).json({
       status: "success",
       message: "Álbum actualizado exitosamente.",
-      album: updatedAlbum,
+      album: responseAlbum,
     });
   } catch (error) {
     // Manejar errores generales
@@ -151,6 +183,7 @@ const updateAlbum = async (req, res) => {
     });
   }
 };
+
 const removeAlbum = async (req, res) => {
   try {
     // Recoger el parámetro de la URL que contiene el ID del álbum a eliminar
@@ -163,38 +196,64 @@ const removeAlbum = async (req, res) => {
     if (userRole !== "admin") {
       return res.status(403).json({
         status: "error",
-        message: "No tienes permiso para actualizar este album.",
+        message: "No tienes permiso para eliminar este álbum.",
       });
     }
 
-    // Buscar y eliminar el álbum por su ID
-    const deletedAlbum = await Album.findByIdAndDelete(albumId);
-    const deleteSongs = await Song.deleteMany({ album: albumId });
+    // Buscar el álbum por su ID para obtener la ruta de la imagen y las canciones asociadas
+    const album = await Album.findById(albumId);
 
-    // Verificar si se encontró y eliminó el álbum
-    if (!deletedAlbum) {
+    // Verificar si se encontró el álbum
+    if (!album) {
       return res.status(404).json({
         status: "error",
         message: "Álbum no encontrado.",
       });
     }
 
+    // Obtener la ruta de la imagen del álbum
+    const currentImage = album.image; // Reemplaza "image" con el campo correcto que almacena el nombre de la imagen
+    const imagePath = `./uploads/album/${currentImage}`;
+
+    // Verificar si el archivo de imagen existe antes de intentar eliminarlo
+    if (fs.existsSync(imagePath)) {
+      // Eliminar la imagen del álbum del sistema de archivos
+      fs.unlinkSync(imagePath);
+    }
+
+    // Obtener todas las canciones asociadas al álbum
+    const songs = await Song.find({ album: albumId });
+
+    // Eliminar los archivos de audio de las canciones
+    songs.forEach((song) => {
+      const audioPath =  `./uploads/audios/${song.file}`;// Reemplaza "audio" con el campo correcto que almacena el nombre del archivo de audio
+      if (fs.existsSync(audioPath)) {
+        fs.unlinkSync(audioPath);
+      }
+    });
+
+    // Eliminar todas las canciones asociadas
+    await Song.deleteMany({ album: albumId });
+
+    // Eliminar el álbum de la base de datos
+    const deletedAlbum = await Album.findByIdAndDelete(albumId);
+
     // Devolver una respuesta exitosa
     res.status(200).json({
       status: "success",
-      message: "Álbum eliminado exitosamente.",
+      message: "Álbum y canciones eliminados exitosamente.",
       album: deletedAlbum,
-      songs: deleteSongs,
     });
   } catch (error) {
     // Manejar errores generales
     res.status(500).json({
       status: "error",
-      message: "Error al eliminar el álbum.",
+      message: "Error al eliminar el álbum y las canciones.",
       error: error.message,
     });
   }
 };
+
 
 const upload = async (req, res) => {
   // Recoger el fichero y comprobar si existe
