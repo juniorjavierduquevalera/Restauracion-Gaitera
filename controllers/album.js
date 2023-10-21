@@ -226,7 +226,7 @@ const removeAlbum = async (req, res) => {
 
     // Eliminar los archivos de audio de las canciones
     songs.forEach((song) => {
-      const audioPath =  `./uploads/audios/${song.file}`;// Reemplaza "audio" con el campo correcto que almacena el nombre del archivo de audio
+      const audioPath = `./uploads/audios/${song.file}`; // Reemplaza "audio" con el campo correcto que almacena el nombre del archivo de audio
       if (fs.existsSync(audioPath)) {
         fs.unlinkSync(audioPath);
       }
@@ -254,65 +254,55 @@ const removeAlbum = async (req, res) => {
   }
 };
 
-
 const upload = async (req, res) => {
-  // Recoger el fichero y comprobar si existe
-  if (!req.file) {
-    return res.status(404).send({
-      status: "error",
-      message: "La petición no incluye la imagen",
-    });
-  }
-
-  // Conseguir el nombre del archivo
-  let image = req.file.originalname;
-
-  // Sacar información de la imagen
-  const imageSplit = image.split(".");
-  const extension = imageSplit[1];
-
-  // Comprobar si la extensión es válida
-  if (extension !== "png" && extension !== "jpg" && extension !== "jpeg") {
-    const filePath = req.file.filePath; // Utiliza la misma propiedad filePath
-    try {
-      fs.unlinkSync(filePath); // Elimina el archivo asociado
+  try {
+    if (!req.file) {
       return res.status(404).send({
         status: "error",
-        message: "La extensión no es válida. El archivo ha sido eliminado.",
-      });
-    } catch (error) {
-      return res.status(500).send({
-        status: "error",
-        message: "Error al eliminar el archivo.",
+        message: "La petición no incluye la imagen",
       });
     }
-  }
 
-  // Obtener el nombre de la imagen actual en la base de datos
-  try {
+    let image = req.file.originalname;
+    const imageSplit = image.split(".");
+    const extension = imageSplit[1];
+
+    if (extension != "png" && extension != "jng" && extension != "jpeg") {
+      const filePath = req.file.path;
+      const fileDeleted = fs.unlinkSync(filePath);
+
+      return res.status(404).send({
+        status: "error",
+        message: "la etension no es valida",
+      });
+    }
+
     const album = await Album.findOne({ _id: req.params.id });
-    let currentImage = album.image; // Nombre de la imagen actual en la base de datos
 
-    // Verificar si hay una imagen actual antes de intentar eliminarla
+    if (!album) {
+      // El álbum no fue encontrado, puedes manejarlo como desees
+      const filePath = req.file.path;
+      const fileDeleted = fs.unlinkSync(filePath);
+
+      return res.status(404).json({
+        status: "error",
+        message: "Álbum no encontrado.",
+      });
+    }
+
+    let currentImage = album.image;
+
+    const deleteFile = (filePath) => {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    };
+
     if (currentImage) {
       const imagePath = `./uploads/album/${currentImage}`;
-
-      // Verificar si el archivo existe antes de intentar eliminarlo
-      if (fs.existsSync(imagePath)) {
-        fs.unlinkSync(imagePath); // Eliminar la imagen anterior si existe
-      }
+      deleteFile(imagePath);
     }
-  } catch (error) {
-    // Manejar errores al obtener o eliminar la imagen anterior
-    return res.status(500).json({
-      status: "error",
-      message: "Error al obtener o eliminar la imagen anterior.",
-      error: error.message,
-    });
-  }
 
-  // Si es correcto, se sube a la base de datos
-  try {
     const updatedAlbum = await Album.findOneAndUpdate(
       { _id: req.params.id },
       { image: req.file.filename },
@@ -320,24 +310,21 @@ const upload = async (req, res) => {
     ).select("-email -__v");
 
     if (!updatedAlbum) {
-      // Si no se encontró un usuario para actualizar, puedes manejar el error aquí
       return res.status(404).json({
         status: "error",
-        message: "Usuario no encontrado.",
+        message: "Álbum no encontrado.",
       });
     }
 
-    // Si se actualizó correctamente, puedes enviar una respuesta exitosa
     return res.status(200).json({
       status: "success",
       message: "Imagen de perfil actualizada con éxito.",
       album: updatedAlbum,
     });
   } catch (error) {
-    // Manejo de errores en caso de que ocurra un error durante la actualización
     return res.status(500).json({
       status: "error",
-      message: "Error al actualizar la imagen de perfil.",
+      message: "Ocurrió un error.",
       error: error.message,
     });
   }

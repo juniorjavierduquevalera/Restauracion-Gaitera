@@ -128,7 +128,7 @@ const profile = async (req, res) => {
     const id = req.params.id;
 
     // Consulta para obtener los datos del perfil
-    const user = await User.findById(id).select('-created_at -__v');
+    const user = await User.findById(id).select("-created_at -__v");
 
     if (!user) {
       return res.status(404).json({
@@ -138,7 +138,7 @@ const profile = async (req, res) => {
     }
 
     res.status(200).json({
-      status: "success",      
+      status: "success",
       profile: user,
     });
   } catch (error) {
@@ -236,37 +236,28 @@ const upload = async (req, res) => {
 
   // Conseguir el nombre del archivo
   let image = req.file.originalname;
-
-  // Sacar información de la imagen
   const imageSplit = image.split(".");
   const extension = imageSplit[1];
 
-  // Comprobar si la extensión es válida
-  if (extension !== "png" && extension !== "jpg" && extension !== "jpeg") {
-    const filePath = req.file.filePath; // Utiliza la misma propiedad filePath
-    try {
-      fs.unlinkSync(filePath); // Elimina el archivo asociado
-      return res.status(404).send({
-        status: "error",
-        message: "La extensión no es válida. El archivo ha sido eliminado.",
-      });
-    } catch (error) {
-      return res.status(500).send({
-        status: "error",
-        message: "Error al eliminar el archivo.",
-      });
-    }
+  if (extension != "png" && extension != "jng" && extension != "jpeg") {
+    const filePath = req.file.path;
+    const fileDeleted = fs.unlinkSync(filePath);
+
+    return res.status(404).send({
+      status: "error",
+      message: "la etension no es valida",
+    });
   }
 
   // Obtener el nombre de la imagen actual en la base de datos
   try {
     const user = await User.findOne({ _id: req.user.id });
     let currentImage = user.image; // Nombre de la imagen actual en la base de datos
-  
+
     // Verificar si hay una imagen actual antes de intentar eliminarla
     if (currentImage) {
       const imagePath = `./uploads/avatars/${currentImage}`;
-  
+
       // Verificar si el archivo existe antes de intentar eliminarlo
       if (fs.existsSync(imagePath)) {
         fs.unlinkSync(imagePath); // Eliminar la imagen anterior si existe

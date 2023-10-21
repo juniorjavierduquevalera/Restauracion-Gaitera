@@ -166,39 +166,50 @@ const updateSong = async (req, res) => {
     });
   }
 };
-
 const removeSong = async (req, res) => {
   try {
     // Obtener el ID de la canción de los parámetros de la URL
     const songId = req.params.songId;
 
-    // Obtener datos del usuario//
+    // Obtener datos del usuario
     const userRole = req.user.role;
 
     // Verifica si el usuario es el propietario o tiene el rol "admin"
     if (userRole !== "admin") {
       return res.status(403).json({
         status: "error",
-        message: "No tienes permiso para eliminar esta cancion",
+        message: "No tienes permiso para eliminar esta canción",
       });
     }
 
-    // Buscar la canción por su ID y eliminarla
-    const deletedSong = await Song.findByIdAndRemove(songId);
+    // Buscar la canción por su ID en la base de datos
+    const song = await Song.findById(songId);
 
-    // Verificar si la canción se eliminó correctamente
-    if (!deletedSong) {
+    // Verificar si la canción existe
+    if (!song) {
       return res.status(404).json({
         status: "error",
         message: "Canción no encontrada.",
       });
     }
 
+    // Obtener el nombre del archivo de audio asociado a la canción
+    const audioFileName = song.file;
+
+    // Eliminar la canción de la base de datos
+    await Song.findByIdAndRemove(songId);
+
+    // Eliminar el archivo de audio del sistema de archivos
+    const audioFilePath = `./uploads/audios/${audioFileName}`;
+    if (fs.existsSync(audioFilePath)) {
+      fs.unlinkSync(audioFilePath);
+    }
+
     // Devolver una respuesta exitosa con la canción eliminada
     res.status(200).json({
       status: "success",
       message: "Canción eliminada exitosamente.",
-      song: deletedSong,
+      song: song,
     });
   } catch (error) {
     // Manejar errores generales

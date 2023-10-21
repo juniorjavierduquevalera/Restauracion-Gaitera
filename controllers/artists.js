@@ -1,7 +1,7 @@
 const Artist = require("../models/artist");
 const Album = require("../models/album");
 const Song = require("../models/song");
-  const fs = require("fs");
+const fs = require("fs");
 const path = require("path");
 
 const save = async (req, res) => {
@@ -247,7 +247,6 @@ const remove = async (req, res) => {
   }
 };
 
-
 const upload = async (req, res) => {
   // Recoger el fichero y comprobar si existe
   if (!req.file) {
@@ -259,26 +258,17 @@ const upload = async (req, res) => {
 
   // Conseguir el nombre del archivo
   let image = req.file.originalname;
-
-  // Sacar información de la imagen
   const imageSplit = image.split(".");
   const extension = imageSplit[1];
 
-  // Comprobar si la extensión es válida
-  if (extension !== "png" && extension !== "jpg" && extension !== "jpeg") {
-    const filePath = req.file.filePath; // Utiliza la misma propiedad filePath
-    try {
-      fs.unlinkSync(filePath); // Elimina el archivo asociado
-      return res.status(404).send({
-        status: "error",
-        message: "La extensión no es válida. El archivo ha sido eliminado.",
-      });
-    } catch (error) {
-      return res.status(500).send({
-        status: "error",
-        message: "Error al eliminar el archivo.",
-      });
-    }
+  if (extension != "png" && extension != "jng" && extension != "jpeg") {
+    const filePath = req.file.path;
+    const fileDeleted = fs.unlinkSync(filePath);
+
+    return res.status(404).send({
+      status: "error",
+      message: "la etension no es valida",
+    });
   }
 
   // Obtener el nombre de la imagen actual en la base de datos
